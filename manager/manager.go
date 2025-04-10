@@ -9,7 +9,7 @@ import (
 
 type Manager struct {
 	Pending       queue.Queue
-	TaskDB        map[string]*task.Task
+	TaskDb        map[string]*task.Task
 	EventDb       map[string]*task.TaskEvent
 	Workers       []string
 	WorkerTaskMap map[string][]uuid.UUID
