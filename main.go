@@ -5,9 +5,11 @@ import (
 	"Cube/node"
 	"Cube/task"
 	"Cube/worker"
-	"fmt"
+	"github.com/docker/docker/client"
 	"github.com/golang-collections/collections/queue"
 	"github.com/google/uuid"
+	"log"
+	"os"
 	"time"
 )
 
@@ -28,15 +30,15 @@ func main() {
 		Task:      t,
 	}
 
-	fmt.Printf("task: %v\n", t)
-	fmt.Printf("task event: %v\n", te)
+	log.Printf("task: %v\n", t)
+	log.Printf("task event: %v\n", te)
 
 	w := worker.Worker{
 		Name:  "Worker-1",
 		Queue: *queue.New(),
 		Db:    make(map[uuid.UUID]*task.Task),
 	}
-	fmt.Printf("worker: %v\n", w)
+	log.Printf("worker: %v\n", w)
 	w.CollectStats()
 	w.RunTask()
 	w.StartTask()
@@ -48,7 +50,7 @@ func main() {
 		EventDb: make(map[string]*task.TaskEvent),
 		Workers: []string{w.Name},
 	}
-	fmt.Printf("manager: %v\n", m)
+	log.Printf("manager: %v\n", m)
 	m.SelectWorker()
 	m.UpdateTasks()
 	m.SendWork()
@@ -61,5 +63,50 @@ func main() {
 		Disk:   25,
 		Role:   "worker",
 	}
-	fmt.Printf("node: %v\n", n)
+	log.Printf("node: %v\n", n)
+
+	dc, _ := client.NewClientWithOpts(client.FromEnv)
+
+	log.Printf("Create a test container\n")
+	container, result := createContainer(dc)
+	if result.Error != nil {
+		log.Printf("Error creating container: %v\n", result.Error)
+		os.Exit(1)
+	}
+
+	time.Sleep(time.Second * 5)
+	log.Printf("Stopping container %s\n", result.ContainerId)
+	_ = stopContainer(container, result.ContainerId)
+}
+
+func createContainer(dc *client.Client) (*task.Docker, *task.DockerResult) {
+	c := task.Config{
+		Name:  "test-container-1",
+		Image: "nginx:alpine",
+	}
+
+	d := task.Docker{
+		Config: c,
+		Client: dc,
+	}
+
+	result := d.Run()
+	if result.Error != nil {
+		log.Printf("Error: %v\n", result.Error)
+		return nil, nil
+	}
+
+	log.Printf("Container %s is running with config %v\n", result.ContainerId, c)
+	return &d, &result
+}
+
+func stopContainer(d *task.Docker, id string) *task.DockerResult {
+	result := d.Stop(id)
+	if result.Error != nil {
+		log.Printf("Error: %v\n", result.Error)
+		return nil
+	}
+
+	log.Printf("Container %s has been stopped and removed\n", id)
+	return &result
 }
